@@ -44,87 +44,62 @@ export interface ApiUser {
 
 // 1. Mengambil Semua Produk dengan Fitur Search & Pagination langsung di Server
 export async function getProducts(
-  search: string = "",
+  search: string = '',
   page: number = 1,
-  limit: number = 8 // Menampilkan 8 produk per halaman
+  limit: number = 8
 ): Promise<{ products: Product[]; totalPages: number }> {
   const res = await fetch('https://fakestoreapi.com/products', { cache: 'no-store' });
   if (!res.ok) throw new Error('Gagal mengambil data produk dari API');
-  
+
   let allProducts: Product[] = await res.json();
 
-  // Logika Filter Search (Pencarian nama produk)
   if (search) {
     allProducts = allProducts.filter((product) =>
       product.title.toLowerCase().includes(search.toLowerCase())
     );
   }
 
-  // Hitung total halaman berdasarkan hasil filter pencarian
-  const totalPages = Math.ceil(allProducts.length / limit);
+  const totalPages = Math.ceil(allProducts.length / limit) || 1;
 
-  // Logika Pagination (Memotong daftar produk sesuai nomor halaman)
   const startIndex = (page - 1) * limit;
   const endIndex = startIndex + limit;
   const paginatedProducts = allProducts.slice(startIndex, endIndex);
 
   return {
     products: paginatedProducts,
-    totalPages: totalPages || 1, // Minimal halaman adalah 1 jika data kosong
+    totalPages,
   };
 }
 
 // 2. Mengambil Detail Satu Produk Langsung dari API
 export async function getProductDetail(id: string): Promise<Product> {
-  const res = await fetch(`https://fakestoreapi.com/products/${id}`);
+  const res = await fetch(`https://fakestoreapi.com/products/${id}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Gagal mengambil detail produk dari API');
   return res.json();
 }
 
-// 3. Login User & Simpan Token di Cookie via API (Sudah Diperbaiki Endpoint-nya)
-export async function loginAction(formData: FormData) {
-  // TAMBAHKAN .toString() ATAU as string DI AKHIR VARIABEL
-  const username = (formData.get('username')?.toString() || '').trim();
-  const password = (formData.get('password')?.toString() || '').trim();
+/**
+ * 3. SIMPAN TOKEN LOGIN KE COOKIE (TIDAK CALL API FAKSTORE DARI SERVER)
+ * Login ke fakestore dilakukan di CLIENT (browser) supaya tidak kena 403 Cloudflare di Vercel.
+ */
+export async function saveLoginToCookie(token: string, username: string) {
+  const cookieStore = await cookies();
 
-  try {
-    const res = await fetch('https://fakestoreapi.com/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }), // Sekarang data terkirim sebagai teks JSON murni yang valid
-    });
+  cookieStore.set('user_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  });
 
-    if (!res.ok) {
-  const err = await res.text();
-  return { success: false, message: `Login gagal (${res.status}): ${err}` };
-}
+  cookieStore.set('username', username, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  });
 
-    const data = await res.json();
-    if (data.token) {
-      const cookieStore = await cookies();
-      
-      // TAMBAHKAN PENGATURAN SECURE & SAMESITE PADA COOKIE
-      cookieStore.set('user_token', data.token, { 
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Otomatis aktif saat di Vercel (HTTPS)
-        sameSite: 'lax',
-        path: '/'
-      });
-      
-      cookieStore.set('username', username, { 
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/'
-      });
-      
-      return { success: true, message: 'Login Berhasil!' };
-    }
-
-    return { success: false, message: 'Login Gagal.' };
-  } catch (error) {
-    return { success: false, message: 'Terjadi kesalahan saat login.' };
-  }
+  return { success: true, message: 'Login Berhasil!' };
 }
 
 // 4. Logout (Hapus Cookie)
@@ -132,6 +107,8 @@ export async function logoutAction() {
   const cookieStore = await cookies();
   cookieStore.delete('user_token');
   cookieStore.delete('username');
+
+  // kalau kamu pernah pakai cookie ini, aman dihapus juga
   cookieStore.delete('shopping_cart');
 }
 
@@ -148,9 +125,7 @@ export async function getProfile() {
 // 6. Mengambil Data Keranjang Belanja dari Cookie Spesifik per User
 export async function getCart(): Promise<CartItem[]> {
   const cookieStore = await cookies();
-  const username = cookieStore.get('username')?.value || 'guest'; // Ambil username aktif
-  
-  // Nama cookie disesuaikan dengan nama user yang login
+  const username = cookieStore.get('username')?.value || 'guest';
   const cartData = cookieStore.get(`shopping_cart_${username}`)?.value;
   return cartData ? JSON.parse(cartData) : [];
 }
@@ -160,7 +135,7 @@ export async function addToCartAction(product: Product) {
   const cookieStore = await cookies();
   const username = cookieStore.get('username')?.value || 'guest';
   const currentCart = await getCart();
-  
+
   const existingItem = currentCart.find((item) => item.id === product.id);
 
   if (existingItem) {
@@ -175,8 +150,11 @@ export async function addToCartAction(product: Product) {
     });
   }
 
-  // Simpan ke cookie khusus milik user tersebut
-  cookieStore.set(`shopping_cart_${username}`, JSON.stringify(currentCart));
+  cookieStore.set(`shopping_cart_${username}`, JSON.stringify(currentCart), {
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  });
 }
 
 // 8. Perubahan Quantity Pembelian Spesifik per User
@@ -185,16 +163,21 @@ export async function updateQuantityAction(id: number, amount: number) {
   const username = cookieStore.get('username')?.value || 'guest';
   let currentCart = await getCart();
 
-  currentCart = currentCart.map((item) => {
-    if (item.id === id) {
-      const newQty = item.quantity + amount;
-      return { ...item, quantity: newQty };
-    }
-    return item;
-  }).filter((item) => item.quantity > 0);
+  currentCart = currentCart
+    .map((item) => {
+      if (item.id === id) {
+        const newQty = item.quantity + amount;
+        return { ...item, quantity: newQty };
+      }
+      return item;
+    })
+    .filter((item) => item.quantity > 0);
 
-  // Update ke cookie khusus milik user tersebut
-  cookieStore.set(`shopping_cart_${username}`, JSON.stringify(currentCart));
+  cookieStore.set(`shopping_cart_${username}`, JSON.stringify(currentCart), {
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  });
 }
 
 // 9. Kosongkan Keranjang setelah Checkout Spesifik per User
@@ -204,12 +187,12 @@ export async function clearCartAction() {
   cookieStore.delete(`shopping_cart_${username}`);
 }
 
+// (Optional) kalau kamu butuh ini di tempat lain (SERVER):
 export async function getAllUsers(): Promise<ApiUser[]> {
   try {
-    // Memastikan endpoint URL mengarah lengkap ke /users
     const res = await fetch('https://fakestoreapi.com/users', { cache: 'no-store' });
     if (!res.ok) return [];
-    return await res.json(); 
+    return await res.json();
   } catch {
     return [];
   }
