@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getProfile } from '@/serveraction/action';
-import ProductsClient from './ProductsClient';
+import ProductsClient from './productsclient';
 
 interface HomeProps {
   searchParams: { search?: string; page?: string } | Promise<{ search?: string; page?: string }>;
