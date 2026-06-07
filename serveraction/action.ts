@@ -83,15 +83,15 @@ export async function getProductDetail(id: string): Promise<Product> {
 
 // 3. Login User & Simpan Token di Cookie via API (Sudah Diperbaiki Endpoint-nya)
 export async function loginAction(formData: FormData) {
-  const username = formData.get('username');
-  const password = formData.get('password');
+  // TAMBAHKAN .toString() ATAU as string DI AKHIR VARIABEL
+  const username = formData.get('username')?.toString() || '';
+  const password = formData.get('password')?.toString() || '';
 
   try {
-    // SEKARANG URL SUDAH DIKOREKSI MENJADI LENGKAP KE /auth/login
     const res = await fetch('https://fakestoreapi.com/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password }), // Sekarang data terkirim sebagai teks JSON murni yang valid
     });
 
     if (!res.ok) {
@@ -102,7 +102,7 @@ export async function loginAction(formData: FormData) {
     if (data.token) {
       const cookieStore = await cookies();
       cookieStore.set('user_token', data.token, { httpOnly: true });
-      cookieStore.set('username', username as string, { httpOnly: true });
+      cookieStore.set('username', username, { httpOnly: true });
       return { success: true, message: 'Login Berhasil!' };
     }
     return { success: false, message: 'Gagal mendapatkan token.' };
