@@ -101,15 +101,24 @@ export async function loginAction(formData: FormData) {
     const data = await res.json();
     if (data.token) {
       const cookieStore = await cookies();
-      cookieStore.set('user_token', data.token, { httpOnly: true });
-      cookieStore.set('username', username, { httpOnly: true });
+      
+      // TAMBAHKAN PENGATURAN SECURE & SAMESITE PADA COOKIE
+      cookieStore.set('user_token', data.token, { 
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Otomatis aktif saat di Vercel (HTTPS)
+        sameSite: 'lax',
+        path: '/'
+      });
+      
+      cookieStore.set('username', username, { 
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/'
+      });
+      
       return { success: true, message: 'Login Berhasil!' };
     }
-    return { success: false, message: 'Gagal mendapatkan token.' };
-  } catch {
-    return { success: false, message: 'Terjadi kesalahan pada jaringan atau server API.' };
-  }
-}
 
 // 4. Logout (Hapus Cookie)
 export async function logoutAction() {
