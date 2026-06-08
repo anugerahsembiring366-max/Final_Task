@@ -25,12 +25,24 @@ export default function ProductDetailClient({ id }: { id: string }) {
         setErr('');
 
         const res = await fetch(`https://fakestoreapi.com/products/${id}`);
+
+        const text = await res.text();
+
         if (!res.ok) {
-          const t = await res.text();
-          throw new Error(`Gagal ambil detail (${res.status}): ${t}`);
+          throw new Error(`Gagal ambil detail (${res.status}): ${text.slice(0, 120)}`);
         }
 
-        const data = (await res.json()) as Product;
+        if (!text) {
+          throw new Error('Response API kosong (bukan JSON).');
+        }
+
+        let data: Product;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(`Response bukan JSON. Contoh isi: ${text.slice(0, 120)}`);
+        }
+
         if (!cancelled) setProduct(data);
       } catch (e: any) {
         if (!cancelled) setErr(e?.message || 'Gagal memuat detail produk');
