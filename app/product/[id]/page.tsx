@@ -1,38 +1,24 @@
-// app/product/[id]/page.tsx
-import { getProductDetail, addToCartAction } from '../../../serveraction/action';
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { getProfile } from '@/serveraction/action';
+import ProductDetailClient from './productdetailclient';
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
-
-export default async function ProductDetail({ params }: PageProps) {
-  const { id } = await params;
-  const product = await getProductDetail(id);
-
-  async function handleAddToCart() {
-    'use server';
-    await addToCartAction(product);
-    redirect('/cart'); // Otomatis ke halaman keranjang belanja
-  }
+export default async function ProductPage({ params }: { params: { id: string } }) {
+  const user = await getProfile();
+  if (!user) redirect('/login');
 
   return (
-    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'sans-serif' }}>
-      <Link href="/">← Kembali ke List Produk</Link>
-      <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '10px', marginTop: '20px', textAlign: 'center' }}>
-        <img src={product.image} alt={product.title} style={{ width: '250px', height: '250px', objectFit: 'contain', marginBottom: '20px' }} />
-        <h1 style={{ fontSize: '22px' }}>{product.title}</h1>
-        <p style={{ color: '#777', textTransform: 'uppercase', fontSize: '12px' }}>Kategori: {product.category}</p>
-        <p style={{ textAlign: 'justify', margin: '20px 0', lineHeight: '1.5' }}>{product.description}</p>
-        <h2 style={{ color: '#e44d26', marginBottom: '20px' }}>Harga: ${product.price}</h2>
-        
-        <form action={handleAddToCart}>
-          <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px', fontSize: '16px', cursor: 'pointer', fontWeight: 'bold' }}>
-            🛒 Tambah Produk ke Keranjang
-          </button>
-        </form>
-      </div>
+    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+      <nav style={{ display: 'flex', gap: '20px', marginBottom: '30px', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
+        <Link href="/">🏠 Beranda</Link> | 
+        <Link href="/profile">👤 Profile ({user.username})</Link> | 
+        <Link href="/cart">🛒 Keranjang</Link>
+      </nav>
+
+      <h1 style={{ marginTop: 0 }}>Detail Produk</h1>
+
+      {/* Detail diambil dari CLIENT supaya tidak error di Vercel */}
+      <ProductDetailClient id={params.id} />
     </div>
   );
 }
